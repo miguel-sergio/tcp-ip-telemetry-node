@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "milestone/*"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Firmware build (ESP32)
+    runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v6.0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare sdkconfig.defaults
+        run: cp sdkconfig.defaults.example sdkconfig.defaults
+
+      - name: Build firmware
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py set-target esp32 build
+
+  target-tests:
+    name: Target tests (ESP32 hardware)
+    runs-on: [self-hosted, esp32]
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare sdkconfig.defaults
+        run: |
+          echo 'CONFIG_WIFI_SSID="${{ secrets.WIFI_SSID }}"' > sdkconfig.defaults
+          echo 'CONFIG_WIFI_PASSWORD="${{ secrets.WIFI_PASSWORD }}"' >> sdkconfig.defaults
+
+      - name: Check ESP32 port
+        run: ls /dev/cu.usbserial* || ls /dev/ttyUSB*
+
+      - name: Flash and run target tests
+        run: |
+          idf.py set-target esp32 build flash
+          pytest pytest_telemetry_node.py \
+            --target esp32 \
+            --embedded-services esp,idf \
+            -v
