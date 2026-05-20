@@ -28,6 +28,8 @@ void tcp_send_telemetry(const telemetry_t *msg) {
         return;
     }
 
+    ESP_LOGI(TAG, "telemetry: %s", json_str);
+
     struct sockaddr_in dest_addr = {
         .sin_family = AF_INET,
         .sin_port   = htons(SERVER_PORT),
@@ -37,27 +39,24 @@ void tcp_send_telemetry(const telemetry_t *msg) {
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock < 0) {
         ESP_LOGE(TAG, "failed to create socket: errno %d", errno);
-        free(json_str);
+        cJSON_free(json_str);
         return;
     }
 
     if (connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr)) != 0) {
         ESP_LOGE(TAG, "connect failed: errno %d", errno);
+        cJSON_free(json_str);
         close(sock);
-        free(json_str);
         return;
     }
 
-    size_t len = strlen(json_str);
-    json_str[len] = '\n';
-
-    int err = send(sock, json_str, len + 1, 0);
+    int err = send(sock, json_str, strlen(json_str), 0);
     if (err < 0) {
         ESP_LOGE(TAG, "send failed: errno %d", errno);
     } else {
-        ESP_LOGI(TAG, "telemetry sent: %s", json_str);
+        ESP_LOGI(TAG, "telemetry delivered");
     }
 
+    cJSON_free(json_str);
     close(sock);
-    free(json_str);
 }
